@@ -1,6 +1,6 @@
 # Browser-Based game competition
 
-[#bbg](http://hashbbg.com) is having its fourth semi-monthly game creation challenge!  A genre will be randomly selected, and, during the next month, contestants will have 12 hours to spend on creating code, art and music for an original game.
+[#bbg](http://hashbbg.com) is having its fourth semi-monthly game creation challenge!  A genre has been randomly selected, and, during the next month, contestants will have 12 hours to spend on creating code, art and music for an original game.
 
 If you have an itch to work with friends, then feel free to team up and submit a team entry.  Every member has 12 hours, and the size of your team has to be disclosed with your submission.
 
@@ -10,9 +10,13 @@ All the entries will be open sourced, too, so feel free to have a look at anyone
 
 The contest starts on 15th March, 5pm GMT, and finishes 15th April, 5pm GMT.
 
-#### Genre List:
+#### Genre:
 
-The genre will be randomly selected from the list below at the very start of the contest:
+The genre for BBGChallenge4 is:
+
+# RACING
+
+The genre has beeb randomly selected from the list below at the very start of the contest:
 
 * beat-em-up (a la streets of rage)
 * FPS
