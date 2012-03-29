@@ -146,6 +146,10 @@
     };
   });
 
+  window.requestAnimFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || function(callback) {
+    return window.setTimeout(callback, 1000 / 60);
+  };
+
   module("main", ["rendering", "input", "graphics", "logic"], function(rendering, input, graphics, logic) {
     return function(images) {
       var context, currentInput, display, gameState, lastTimeInMs, main, renderState;
@@ -163,7 +167,7 @@
         logic.updateGameState(passedTimeInS, currentInput, gameState);
         graphics.updateRenderState(gameState, currentInput, renderState);
         rendering.render(display, images, renderState.renderables);
-        return webkitRequestAnimationFrame(main);
+        return requestAnimFrame(main);
       };
       return main(lastTimeInMs);
     };
