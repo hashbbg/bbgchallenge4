@@ -43,7 +43,8 @@ the sun: It has a small moon orbiting it!
 ## Feedback
 
 If you have comments, questions, critisism or any other kind of feedback, please
-post it on my blog at [LINK MISSING]()
+post it on my blog at
+[http://blog.hannobraun.com/2012/03/29/my-entry-for-bbg-challenge-4/](http://blog.hannobraun.com/2012/03/29/my-entry-for-bbg-challenge-4/)
 
 Alternatively, you can send an email to
 [mail@hannobraun.com](mailto:mail@hannobraun.com)
