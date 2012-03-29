@@ -50,4 +50,4 @@ Alternatively, you can send an email to
 
 ## Where to play
 
-[LINK MISSING]()
+[http://hbraun.github.com/bbgchallenge4/](http://hbraun.github.com/bbgchallenge4/)
