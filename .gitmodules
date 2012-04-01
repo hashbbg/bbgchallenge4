@@ -1,0 +1,3 @@
+[submodule "blazing-race"]
+	path = blazing-race
+	url = https://github.com/gre/blazing-race
