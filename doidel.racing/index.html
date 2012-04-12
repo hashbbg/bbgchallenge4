@@ -1,0 +1,967 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//DE" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Cohorts of Kargonar</title>
+	<link rel="icon" href="graphics/favicon.png" type="image/png">
+	<link rel="stylesheet" type="text/css" href="racing.css">
+	<script type="text/javascript" src="js/mootools-core-1.4.5.js"></script>
+	<script type="text/javascript" src="js/mootools-more-1.4.0.1.js"></script>
+	<script type="text/javascript" src="js/kinetic-v3.8.3.min.js"></script>
+	<script type="text/javascript" src="js/soundmanager2-nodebug-jsmin.js"></script>
+	<script type="text/javascript" src="http://doidel.towerjs.com:1337/socket.io/socket.io.js"></script>
+<style type="text/css">
+	body {
+		margin: 0;
+		padding: 0;
+		background-image: url(graphics/bgImageColor.jpg);
+		background-repeat: repeat;
+	}
+	#container {
+		width: 852px;
+		height: 643px;
+		margin: auto;
+		position: relative;
+		top: 50px;
+	}
+	#canvasContainer {
+		position: absolute;
+		left: 27px;
+		top: 20px;
+	}
+	#borderElement {
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		background-image: url(graphics/border.png);
+		background-repeat: no-repeat;
+	}
+	#menu {
+		margin: auto;
+		width: 330px;
+		margin-top: 5px;
+		font-size: 12px;
+	}
+	#menu img {
+		cursor: pointer;
+		float: right;
+		margin-top: 4px;
+	}
+	input {
+		background-color: #AC9D6A;
+	}
+	#highScoreContainer {
+		position: absolute;
+		right: -130px;
+		top: 50px;
+		color: yellow;
+		font-size: 16px;
+	}
+	#soundSwitch {
+		position: absolute;
+		right: 50px;
+		top: 50px;
+		cursor:pointer;
+	}
+</style>
+</head>
+
+<body>
+	<div id="container">
+		<div id="canvasContainer">
+		</div>
+		<div id="borderElement">
+			<div id="menu">
+				Name: <input id="carNameInput" type="text" value="" />
+				<img src="graphics/restart.png" alt="Restart" onclick="javascript:level.restart();" />
+			</div>
+		</div>
+		<img id="soundSwitch" src="graphics/sound.png" />
+		<div id="highScoreContainer">
+			<table id="highScoreTable">
+			</table>
+		</div>
+	</div>
+</body>
+</html>
+<script type="text/javascript">
+var imgList;
+var layers = [];
+var stage;
+var waggonList;
+var level;
+var levelTime = 0;
+var positionAdjustment = { x: 10, y: 180 };
+window.addEvent('domready', function() {
+	stage = new Kinetic.Stage("canvasContainer", 800, 600);
+    layers[0] = new Kinetic.Layer();
+	layers[1] = new Kinetic.Layer();
+	//preload all images
+	imgList = Asset.images([
+		'graphics/coalwaggon.png', 
+		'graphics/racetrack.jpg', 
+		'graphics/cloud.png', 
+		'graphics/speakBubble1.png',
+		'graphics/checkpoint.png',
+		'graphics/checkpoint2.png'
+		],{
+		onComplete: function(){
+			
+			level = new Level({
+				checkpoints: [[35,32], [6,4], [5,48], [27, 31], [62, 43]],
+				startPoint: [12,66],
+				endPoints: [[66,10], [66,11], [66,12], [66,13], [66,14], [66,15]]
+			});
+			
+			waggonList = [
+				new DriverWaggon()
+			];
+			
+			var citizen = new AnnoyedCitizen({
+				x: 460,
+				y: 230
+			});
+			
+			stage.add(layers[0]);
+			stage.add(layers[1]);
+			
+			initializeSocketExchange();
+			
+			$('carNameInput').addEvent('keyup', function() {
+				waggonList[0].options.name = this.get('value');
+			});
+			
+			var timeCount = 0;
+			var socketTimeCount = 0;
+			stage.onFrame(function(frame) {
+				//counter
+				if (level.options.counterRunning === true) {
+					level.countdownFrame(frame.time);
+				}
+				
+				//track time
+				level.trackTimeFrame(frame.time);
+				
+				//checkpoints
+				level.checkpointsVisibilityFrame(frame.time);
+				
+				//waggon driving
+				if (frame.time > timeCount*100) {
+					timeCount++;
+					//adjust your waggon's speed
+					if (keysPressed.up) {
+						waggonList[0].accelerate(waggonList[0].options.stepSize);
+					} else if (keysPressed.down) {
+						waggonList[0].accelerate(-waggonList[0].options.stepSize);
+					} else {
+						waggonList[0].accelerate(0);
+					}
+					//steer
+					if (keysPressed.right) {
+						waggonList[0].steer(15);
+					} else if (keysPressed.left) {
+						waggonList[0].steer(-15);
+					}
+				}
+				
+				Array.each(waggonList, function(el, index) {
+					//clouds
+					el.cloudFrame(frame.time);
+					
+					//moving
+					var dirs = directionAndSpeedToCoordinates(el.options.speed, el.options.direction);
+					//does the new pos collide with impassable terrain?
+					var collisionData = el.collisionDetection(el.options.coordX, el.options.coordY, -dirs.x, dirs.y);
+					
+					//move waggon and screen
+					el.options.coordX = collisionData.x;
+					el.options.coordY = collisionData.y;
+					var newPosition = getBasicMapPosition(el.options.coordY, el.options.coordX);
+					el.options.image.y = newPosition.top + positionAdjustment.y - el.options.image.height;
+					el.options.image.x = newPosition.left + positionAdjustment.x;
+					if (index == 0) {
+						layers[0].x = (stage.width / 2) - el.options.image.x; 
+						layers[0].y = (stage.height / 2) - el.options.image.y;
+						if (socketExchangeSuccessful && frame.time > socketTimeCount*300) {
+							socketTimeCount++;
+							racer_movesocket.emit('move', {
+							'id': waggonList[0].options.id,
+							'name': waggonList[0].options.name,
+							'imgDir': waggonList[0].options.image.spriteNr, 
+							'coordX': waggonList[0].options.coordX, 
+							'coordY': waggonList[0].options.coordY,
+							'speed': waggonList[0].options.speed,
+							'direction': waggonList[0].options.direction });
+						}
+					} else {
+						//adjust name tag pos
+						el.options.nameTag.text = el.options.name;
+						el.options.nameTag.x = el.options.image.x + 27;
+						el.options.nameTag.y = el.options.image.y - 10;
+						
+						//check if that waggon still exists
+						if (el.options.lastUpdate <= frame.time - 1000) {
+							//remove waggon
+							Array.each(waggonList, function(waggon, index) {
+								if (waggon.options.id == el.options.id && index != 0) {
+									waggon.remove();
+									console.log('splice('+index+', 1)');
+									waggonList = waggonList.erase(waggon);
+								}
+							}.bind(this));
+						}
+					}
+				});
+				
+				//the annoyed citizen
+				citizen.speechBubbleFrame(frame.time);
+				
+				level.checkForCheckpoints(waggonList[0]);
+				
+				layers[0].draw();
+				layers[1].draw();
+				
+				levelTime = frame.time;
+			});
+			
+			stage.start();
+			
+			//start the countdown
+			level.countdown.delay(1000, level);
+		}
+	});
+});
+
+var Level = new Class({
+	Implements: [Options, Events],
+	options: {
+		passablesString: '0000000000000000000000000000000000000000000000000000000000001111110000000000000000000000000010000000000000000011111100000000000000000000000001100000000000000000111111111111111111111111111111111111111000111111111111111111111111111111111111111111111110001111111111111111111111111111111111111111111111100011111111111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001111100000000000000111111000000000000000000000000011100000000000000001111110000000000000000000000000110000000000000000011111111111000000000000000000001100000000000000000111111100000000000000000000000011100000000000000001111110000000000000000000000000111000000000000000011111100000000000000000000000001111000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111111111111111111111111111111100000000000000000111111100000000000001000000000011000000000000000001111110000000000000010000000000110000000000000000011111100000000000000100000000001100000000000000000111111000000000000001000000000011000000000000000001111110000000000000010000000000110000000000000000011111100000000000000111000000001100000000000000000111111000000000000011110000000011000000000000000001111110000000000000011100000000110000000000000000011111100000000000000111111000001100000000000000000111111000000000000001111111111111000000000000000001111110000000000000010000000000110000000000000000011111100000000000000100000000001100000000000000000111111000000000000001000000000011000000000000000001111110000000000000010000000000110000000000000000011111111000000000000100000000001100000000000000000111111000000000000001111111111111111111000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111000000000000000000000000011000000000000000001111110000000000000000000000000110000000000000000011111100000000000000000000000001100000000000000000111111100000000000000000000000011000000000000000011111111111111111111111111111111111111100000000000111111111111111111111111111111111111111000000000001111111000000000000000000000000011000000000000000011111100000000000000000000000000110000000000000000111111000000000000000000000000001100000000000000001111110000000000000000000000000011000000000000000011111100000000000000000000000000110000000000000000111111000000000000000000000000001100000000000000001111110000000000000000000000000011100000000000000011111100000000000000000000000000111000000000000000111111000000000000000000000000001110000000000000001111110000000000000000000000000000000000000000000011111100000000000000000000000000000000000000000000111111000000000000000000000000000000000000000000001111110000000000000000000000000000000000000000000011111100000000000000000000000000000000000000000000111111000000000000000000000000000000000000000000001111110000000000000000000000000000000000000000000011111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+		passables: [],
+		startPoint: [4,4],
+		endPoints: [[17,23]],
+		checkpoints: [],
+		drivingAllowed: false,
+		levelSizeX: 50,
+		levelSizeY: 75,
+		image: ''
+    },
+    initialize: function(options){
+		this.setOptions(options);
+		
+		//passables
+		var char_count = 0;
+		if (this.options.passables.length == 0) {
+			this.options.passables = new Array();
+			for (var y = 1; y <= this.options.levelSizeY; y++) {
+			this.options.passables[y] = [];
+				//convert char to passable
+				for (var x = 1; x <= this.options.levelSizeX; x++) {
+					this.options.passables[y][x] = this.options.passablesString.charAt(char_count);
+					char_count++;
+				}
+			}
+		}
+		
+		//background image
+		this.options.image = new Kinetic.Image({
+			image: imgList[1],
+			x: 0,
+			y: 0
+		});
+		layers[0].add(this.options.image);
+		
+		//counter text
+		this.options.countertext = new Kinetic.Text({
+			x: stage.width / 2,
+			y: 100,
+			text: '3',
+			fontSize: 30,
+			textFill: 'red',
+			fontFamily: 'Calibri',
+			align: 'center',
+			alpha: 0
+		});
+		layers[1].add(this.options.countertext);
+		
+		//add checkpoints
+		this.options.checkpointImages = [];
+		Array.each(this.options.checkpoints, function(el, index) {
+			var checkpointPos = getBasicMapPosition(el[0], el[1]);
+			this.options.checkpointImages[index] = new Kinetic.Image({
+				image: imgList[4],
+				x: positionAdjustment.x + checkpointPos.left,
+				y: positionAdjustment.y + checkpointPos.top - imgList[4].height,
+				spriteNr: 0
+			});
+			this.options.checkpointImages[index].drawFunc = function () {
+				var a = this.getCanvas(),
+				b = this.getContext();
+				b.beginPath(),
+				b.rect(0, 0, this.width, this.height),
+				b.closePath(),
+				this.fillStroke(),
+				b.drawImage(this.image, 39 * this.spriteNr, 0, 39, 111, 0, 0, 39, 111)
+			}
+			layers[0].add(this.options.checkpointImages[index]);
+		}.bind(this));
+		this.options.checkpointCounter = 0;
+		this.options.checkpointTimeStart = 0;
+		
+		//track time
+		this.options.trackTimeText = new Kinetic.Text({
+			x: stage.width / 2,
+			y: 60,
+			text: '0:00',
+			fontSize: 20,
+			textFill: 'yellow',
+			fontFamily: 'Calibri',
+			align: 'center'
+		});
+		layers[1].add(this.options.trackTimeText);
+		this.options.trackTimeStart = 0;
+		
+		//stars count
+		this.options.starsCaptured = 0;
+		this.options.starsCountText = new Kinetic.Text({
+			x: stage.width - 100,
+			y: 60,
+			text: this.options.starsCaptured + '/' + this.options.checkpoints.length + ' stars',
+			fontSize: 12,
+			textFill: 'yellow',
+			fontFamily: 'Calibri',
+			align: 'right'
+		});
+		layers[1].add(this.options.starsCountText);
+	},
+	restart: function() {
+		this.options.drivingAllowed = false;
+		
+		this.options.checkpointCounter = 0;
+		this.options.checkpointTimeStart = 0;
+		this.options.trackTimeStart = 0;
+		this.options.starsCaptured = 0;
+		
+		//place to start
+		waggonList[0].options.coordX = this.options.startPoint[0];
+		waggonList[0].options.coordY = this.options.startPoint[1];
+		waggonList[0].options.direction = 180;
+		
+		//reset checkpoints
+		Array.each(this.options.checkpointImages, function(el, inde) {
+			el.visible = true;
+		});
+		this.options.starsCountText.text = this.options.starsCaptured + '/' + this.options.checkpoints.length + ' stars';
+		
+		//countdown
+		this.countdown.delay(1000, level);
+	},
+	countdown: function() {
+		if (this.options.counterRunning !== true) {
+			this.options.counterRunning = true;
+			this.options.countertext.text = '3';
+			this.options.countertextCount = 0;
+			this.options.countertextTimeStart = 0;
+		}
+	},
+	countdownFrame: function(time) {
+		if (this.options.countertextTimeStart == 0) {
+			this.options.countertextTimeStart = time - 1;
+		}
+		if ((time - this.options.countertextTimeStart) > this.options.countertextCount * 100) {
+			this.options.countertextCount++;
+			var counterStage = Math.floor(this.options.countertextCount / 15);
+			if (counterStage == 4) {
+				this.options.countertext.alpha = 0;
+				this.options.counterRunning = false;
+				return;
+			}
+			if (this.options.countertextCount % 15 == 0) {
+				if (3-counterStage == 2) {
+					var sound = soundManager.getSoundById('readysetgo').play();;
+					if (typeOf(sound) != 'null') {
+						sound.play();
+					}
+				}
+				this.options.countertext.text = '' + ((3-counterStage) == 0 ? 'Go!' : (3-counterStage));
+				if (3-counterStage == 0) {
+					this.options.drivingAllowed = true;
+				}
+			}
+			this.options.countertext.alpha = 0.1 * (15 - (this.options.countertextCount % 15) + 1);
+		}
+	},
+	trackTimeFrame: function(time) {
+		if (this.options.drivingAllowed) {
+			if (this.options.trackTimeStart == 0) {
+				this.options.trackTimeStart = time;
+			}
+			waggonList[0].options.raceTime = Math.round((time - this.options.trackTimeStart) / 10);
+			this.options.trackTimeText.text = Math.floor(waggonList[0].options.raceTime / 100) + ':' + (Math.floor(waggonList[0].options.raceTime/10) % 10) + '' + (waggonList[0].options.raceTime % 10);
+		}
+	},
+	checkForCheckpoints: function(driverWaggon) {
+		if (this.options.drivingAllowed) { 
+			Array.each(this.options.checkpoints, function(checkpoint, index) {
+				if (checkpoint[0] == Math.round(driverWaggon.options.coordY) && checkpoint[1] == Math.round(driverWaggon.options.coordX)) {
+					if (this.options.checkpointImages[index].visible == true) {
+						//remove checkpoint;
+						this.options.checkpointImages[index].visible = false;
+						this.options.starsCaptured++;
+						this.options.starsCountText.text = this.options.starsCaptured + '/' + this.options.checkpoints.length + ' stars';
+						var sound = soundManager.getSoundById('checkpointReached');
+						if (typeOf(sound) != 'null') {
+							sound.play();
+						}
+					}
+				}
+			}, this);
+			//GOAL reached?
+			if (!this.options.checkpointImages.some(function(el) { return el.visible == true; })) {
+				//all checkpoints collected. goal is accessible
+				this.options.endPoints.some(function(endPoint) {
+					if (endPoint[0] == Math.round(driverWaggon.options.coordY) && endPoint[1] == Math.round(driverWaggon.options.coordX)) {				
+						//goal reached!
+						this.options.drivingAllowed = false;
+						driverWaggon.options.speed = 0;
+						var sound = soundManager.getSoundById('checkpointReached');
+						if (typeOf(sound) != 'null') {
+							sound.play();
+						}
+						//send highscore
+						if (socketExchangeSuccessful) {
+							racer_movesocket.emit('highscore', {'name': (driverWaggon.options.name.length > 0 ? driverWaggon.options.name : '???'), 'score': driverWaggon.options.raceTime});
+						}
+						return true;
+					}
+					return false;
+				}.bind(this));
+			}
+		}
+	},
+	checkpointsVisibilityFrame: function(time) {
+		if (this.options.checkpointTimeStart == 0) {
+			this.options.checkpointTimeStart = time - 1;
+		}
+		if ((time - this.options.checkpointTimeStart) > this.options.checkpointCounter * 100) {
+			this.options.checkpointCounter+= Math.floor(((time - this.options.checkpointTimeStart) - (this.options.checkpointCounter * 100)) / 100) + 1;
+			var checkpointSpriteStatus = Math.round(this.options.checkpointCounter / 20);
+			var checkpointStatus = this.options.checkpointCounter % 20;
+			Array.each(this.options.checkpointImages, function(el) {
+				el.alpha = 1 - (0.08 * (checkpointStatus >= 10 ? (10 - (checkpointStatus % 10)) : (checkpointStatus % 10)));
+				el.spriteNr = checkpointSpriteStatus % 3;
+			}, this);
+		}
+	}
+});
+
+var AnnoyedCitizen = new Class({
+	Implements: [Options, Events],
+	options: {
+		texts: ['I will tell the Duke <br />of this impudence!', 'You are going to<br />pay for this!'],
+		imagePic: 'graphics/peasantmap2.png',
+		x: 100,
+		y: 100
+    },
+    initialize: function(options){
+		this.setOptions(options);
+		
+		//citizen himself
+		var citizenImg = new Image();
+		citizenImg.addEvent('load', function() {
+			this.options.image = new Kinetic.Image({
+				image: citizenImg,
+				x: this.options.x,
+				y: this.options.y
+			});
+			layers[0].add(this.options.image);
+		}.bind(this));
+		citizenImg.src = this.options.imagePic;
+		
+		//speech bubble
+		this.options.bubbleImage = new Kinetic.Image({
+			image: imgList[3],
+			x: this.options.x + 20,
+			y: this.options.y - 70
+		});
+		layers[0].add(this.options.bubbleImage);
+		
+		//text on top of bubble
+		this.options.bubbleImageText = [];
+		this.options.bubbleImageText[0] = new Kinetic.Text({
+			x: this.options.bubbleImage.x + 17,
+			y: this.options.bubbleImage.y + 20,
+			text: this.options.texts[0],
+			fontSize: 11,
+			textFill: 'black',
+			fontFamily: 'Georgia',
+			textStrokeWidth: 1.1,
+			alpha: 0
+		});
+		layers[0].add(this.options.bubbleImageText[0]);
+		this.options.bubbleImageText[1] = new Kinetic.Text({
+			x: this.options.bubbleImage.x + 17,
+			y: this.options.bubbleImage.y + 20,
+			text: this.options.texts[0],
+			fontSize: 11,
+			textFill: 'black',
+			fontFamily: 'Georgia',
+			textStrokeWidth: 1.1,
+			alpha: 0
+		});
+		layers[0].add(this.options.bubbleImageText[1]);
+		
+		this.options.speechBubbleTimeStart = 0;
+		this.options.speechBubbleTimeCount = 0;
+		this.options.bubbleImageTextCounter = 0;
+		this.options.bubbleImageTextLength = 1;
+	},
+	speechBubbleFrame: function(time) {
+		if (this.options.speechBubbleTimeStart == 0) {
+			this.options.speechBubbleTimeStart = time - 1;
+		}
+		if ((time - this.options.speechBubbleTimeStart) > this.options.speechBubbleTimeCount * 2000) {
+			this.options.speechBubbleTimeCount++;
+			if (this.options.speechBubbleTimeCount % 5 == 2) {
+				//don't display bubble
+				this.options.bubbleImage.alpha = 0;
+				this.options.bubbleImageText[0].alpha = 0;
+				this.options.bubbleImageText[1].alpha = 0;
+				//change text
+				this.options.bubbleImageTextCounter++;
+			} else {
+				//display bubble
+				this.writeSpeechBubbleText(this.options.texts[this.options.bubbleImageTextCounter % this.options.texts.length]);
+			}
+		}
+	},
+	writeSpeechBubbleText: function(text) {
+		var textParts = text.split('<br />');
+		var textPosStart = textParts.length == 2 ? 12 : 25;
+		for (var x = 0; x < textParts.length; x++) {
+			this.options.bubbleImageText[x].y = this.options.bubbleImage.y + textPosStart + (x*20);
+			this.options.bubbleImageText[x].text = textParts[x];
+		}
+		this.options.bubbleImage.alpha = 1;
+		this.options.bubbleImageText[0].alpha = 1;
+		this.options.bubbleImageText[1].alpha = (textParts.length == 2) ? 1 : 0;
+	}
+});
+
+var Waggon = new Class({
+	Implements: [Options, Events],
+	options: {
+		speed: 0,
+		direction: 180,
+		image: '',
+		stepSize: 0.02,
+		coordX: 1,
+		coordY: 1,
+		clouds: [],
+		cloudAlphaDirs: [],
+		id: 'guest'+Math.round(Math.random()*10000000),
+		name: ''
+    },
+    initialize: function(options){
+		this.setOptions(options);
+		
+		//place to start
+		this.options.coordX = level.options.startPoint[0];
+		this.options.coordY = level.options.startPoint[1];
+		
+		//graphics
+		this.options.image = new Kinetic.Image({
+			image: imgList[0],
+			spriteNr: 1
+		});
+		this.options.image.drawFunc = function () {
+			var a = this.getCanvas(),
+			b = this.getContext();
+			b.beginPath(),
+			b.rect(0, 0, this.width, this.height),
+			b.closePath(),
+			this.fillStroke(),
+			b.drawImage(this.image, 40 * this.spriteNr, 0, 40, 42, 0, 0, 40, 42)
+		}
+		
+		layers[0].add(this.options.image);
+		
+		//5 clouds. orig size: 51 x 38
+		for (var x = 0; x < 5; x++) {
+			this.options.clouds[x] = new Kinetic.Image({
+				image: imgList[2],
+				alpha: 0,
+				width: 12.75,
+				height: 9.5
+			});
+			layers[0].add(this.options.clouds[x]);
+			this.options.cloudAlphaDirs[x] = 1;
+		}
+		this.options.cloudsTimeStart = 0;
+		this.options.cloudsTimeCount = 0;
+		
+		//name tag
+		this.options.nameTag = new Kinetic.Text({
+			x: this.options.image.x + 20,
+			y: this.options.image.y - 10,
+			text: this.options.name,
+			fontSize: 9,
+			textFill: 'yellow',
+			fontFamily: 'Georgia',
+			align: 'center',
+			alpha: 1
+		});
+		layers[0].add(this.options.nameTag);
+		
+		return this;
+    },
+	accelerate: function(val) {
+		if (level.options.drivingAllowed) {
+			//round val
+			this.options.speed = Math.round(this.options.speed / this.options.stepSize) * this.options.stepSize;
+			//val == 0 is no key pressed. slow down to 0
+			if (val == 0 && this.options.speed != 0) {
+				val = this.options.speed > 0 ? -this.options.stepSize : this.options.stepSize;
+			}
+			//adjust speed
+			if (this.options.speed + val > -0.1 && this.options.speed + val < 0.1) {
+				this.options.speed += val;
+			}
+		}
+	},
+	steer: function(val) {
+		if (level.options.drivingAllowed) {
+			this.options.direction = (this.options.direction + val) % 360;
+			if (this.options.direction < 0) {
+				this.options.direction += 360
+			}
+			//adjust sprite: 270 = 0
+			this.options.image.spriteNr = Math.round((this.options.direction / 45) - 3 + 8) % 8;
+			console.log('sprite', this.options.image.spriteNr);
+		}
+	},
+	collisionDetection: function(currentX, currentY, moveX, moveY, log) {
+		var newX = currentX + moveX;
+		var newY = currentY + moveY;
+		if (this.checkForPassable(newX, newY, log)) {
+			return {y: newY, x: newX };
+		} else {
+			//calculate the angles and slide along
+			
+			//get the position of the next tile relative to the current tile
+			var differenceX = Math.round(newX) - Math.round(currentX);
+			var differenceY = Math.round(newY) - Math.round(currentY);
+			
+			//get the angle of the intersection of the two graphs
+			var angle = 0;
+			//calculated: m1 = 9/15.8 = 0.5696202
+			var m1 = 0.569620253164556;
+			if (differenceX == 0 && differenceY == -1) {
+				//colliding with top left
+				angle = this.options.direction - 180;
+			} else if (differenceX == 1 && differenceY == 0) {
+				//top right of the collision tile
+				angle = this.options.direction - 270;
+			} else if (differenceX == 0 && differenceY == 1) {
+				//bottom right of the collision tile
+				angle = this.options.direction - 360;
+			} else if (differenceX == -1 && differenceY == 0) {
+				//bottom left of the collision tile
+				angle = this.options.direction - 90;
+			}
+			
+			//adjust speed and direction accordingly
+			var adjustedDirection = 0;
+			var newSpeed = 0;
+			var adjustmentPercent = 0;
+			if (angle > 0) {
+				adjustedDirection = this.options.direction + (90 - angle);
+				adjustmentPercent = (1/90*(90 - angle));
+				newSpeed = this.options.speed * adjustmentPercent;
+			} else {
+				adjustedDirection = this.options.direction - (90 - angle);
+				adjustmentPercent = (1/90*(90 + angle));
+				newSpeed = this.options.speed * adjustmentPercent;
+			}
+			//this.options.speed *= adjustmentPercent*0.3;
+			
+			var newdirs = directionAndSpeedToCoordinates(newSpeed, adjustedDirection);
+			newX = currentX + newdirs.x;
+			newY = currentY + newdirs.y;
+			//console.log(newdirs.x, newdirs.y, newX, newY, 'speed&dir', this.options.speed, adjustedDirection, this.options.direction, adjustmentPercent, angle);
+			if (this.checkForPassable(newX, newY, log)) {
+				return {y: newY, x: newX };
+			}
+		}
+		
+		//full collision, no sliding
+		this.options.speed = 0;
+		return {y: currentY, x: currentX };
+	},
+	checkForPassable: function(x, y, log) {
+		x = Math.round(x);
+		y = Math.round(y);
+		if (log === true) {
+			console.log('passable check: ', x, y);
+		}
+		if (typeOf(level.options.passables[y]) != 'null' && typeOf(level.options.passables[y][x]) != 'null' && level.options.passables[y][x] == 1) {
+			return true;
+		}
+		return false;
+	},
+	cloudFrame: function(time) {
+		if (this.options.cloudsTimeStart == 0) {
+			this.options.cloudsTimeStart = time - 1;
+		}
+		if ((time - this.options.cloudsTimeStart) > this.options.cloudsTimeCount * 100) {
+			this.options.cloudsTimeCount++;
+			var counterStage = Math.floor(this.options.cloudsTimeCount / 10);
+			//return top cloud to start
+			if (this.options.cloudsTimeCount % 10 == 0) {
+				var cloudnr = counterStage % 5;
+				//alpha
+				this.options.clouds[cloudnr].alpha = 0.1;
+				this.options.cloudAlphaDirs[cloudnr] = 1;
+				//pos
+				var carPos = getBasicMapPosition(this.options.coordY, this.options.coordX);
+				this.options.clouds[cloudnr].x = positionAdjustment.x + carPos.left;
+				this.options.clouds[cloudnr].y = positionAdjustment.y + carPos.top - 50;
+				//size
+				this.options.clouds[cloudnr].width = 12.75;
+				this.options.clouds[cloudnr].height = 9.5;
+			}
+			for (var x = 0; x < 5; x++) {
+				if (this.options.clouds[x].alpha >= 1.5) {
+					this.options.cloudAlphaDirs[x] = -1;
+				}
+				if (this.options.clouds[x].alpha + (0.05 * this.options.cloudAlphaDirs[x]) > 0) {
+					this.options.clouds[x].alpha += 0.05 * this.options.cloudAlphaDirs[x];
+				}
+				this.options.clouds[x].y -= 2;
+				this.options.clouds[x].width += 0.13421 * 3;
+				this.options.clouds[x].height += 0.1 * 3;
+			}
+		}
+	},
+	toot_toot: function() {
+		var sound = soundManager.getSoundById('toot_toot');
+		if (typeOf(sound) != 'null') {
+			sound.play();
+		}
+	},
+	remove: function() {
+		layers[0].remove(this.options.image);
+		Array.each(this.options.clouds, function(el) {
+			layers[0].remove(el);
+		});
+		layers[0].remove(this.options.nameTag);
+	}
+});
+
+var DriverWaggon = new Class({
+	Extends: Waggon,
+    initialize: function(options){
+		this.parent(options);
+		return this;
+    }
+});
+
+// keyboard
+var keysPressed = {
+	up: false,
+	left: false,
+	down: false,
+	right: false
+};
+var myKeyboardEvents = new Keyboard({
+	defaultEventType: 'keydown',
+	active: true,
+    events: {
+        'up': function() { keysPressed['up'] = true;},
+        'keyup:up': function() { keysPressed['up'] = false;},
+        'left': function() { keysPressed['left'] = true;},
+        'keyup:left': function() { keysPressed['left'] = false; },
+        'down': function() { keysPressed['down'] = true;},
+        'keyup:down': function() { keysPressed['down'] = false; },
+        'right': function() { keysPressed['right'] = true;},
+        'keyup:right': function() { keysPressed['right'] = false; },
+		'space': function() { waggonList[0].toot_toot(); }
+    }
+});
+
+var startpostop = 342;
+var startposleft = 6;
+function getBasicMapPosition(y, x) {
+	var posx = (startpostop+((y)*9)-((x)*9))-15; //-imgheight     (15 = picture over tile, not on top of it)
+	var posy = startposleft+((x-1)*15.8)+((y-1)*15.8);
+	return {top : posx, left : posy};
+}
+
+function directionAndSpeedToCoordinates(speed, direction) {
+	var speedFlipped = false;
+	if (speed < 0) {
+		speedFlipped = true;
+		speed *= -1;
+	}
+	
+	var flipType = Math.floor(direction / 90);
+	var deg = direction - flipType * 90;
+	deg = toRadian(deg);
+	var adjacentSide = Math.cos(deg) * speed;
+	var otherSide = Math.sqrt((speed * speed) - (adjacentSide * adjacentSide));
+	switch (flipType) {
+		case 1:
+			var tmp = otherSide;
+			otherSide = adjacentSide;
+			adjacentSide = -tmp;
+		break;
+		case 2:
+			otherSide *= -1;
+			adjacentSide *= -1;
+		break;
+		case 3:
+			var tmp = otherSide;
+			otherSide = -adjacentSide;
+			adjacentSide = tmp;
+		break; 
+	}
+	if (speedFlipped) {
+		adjacentSide *= -1;
+		otherSide *= -1;
+		speed *= -1;
+	}
+	return {y: adjacentSide, x: otherSide};
+}
+
+function toRadian(deg) {
+	return deg * (Math.PI/180);
+}
+
+function toDegree(rad) {
+	return rad/(Math.PI/180);
+}
+
+function cuttingAngle(m1, m2) {
+	return Math.atan(Math.abs((m2 - m1) / (1 + (m1 * m2))));
+}
+
+
+/***** SOCKET.IO *****/
+var socketExchangeSuccessful = false;
+var racer_movesocket;
+function initializeSocketExchange() {
+	try {
+		//racer socket exchange
+		racer_movesocket = io.connect('http://doidel.towerjs.com:1337/racing');
+		racer_movesocket.emit('move', {
+			'id': waggonList[0].options.id,
+			'name': waggonList[0].options.name,
+			'imgDir': waggonList[0].options.image.spriteNr, 
+			'coordX': waggonList[0].options.coordX, 
+			'coordY': waggonList[0].options.coordY,
+			'speed': waggonList[0].options.speed,
+			'direction': waggonList[0].options.direction });
+		
+		//other players
+		racer_movesocket.on('move', function(data) {
+			if (data.id == waggonList[0].options.id) {
+				//we don't want to interprete eventually mislead packages..
+				return;
+			}
+			var racerWaggon;
+			Array.each(waggonList, function(waggon) {
+				if (waggon.options.id == data.id) {
+					racerWaggon = waggon;
+				}
+			});
+			if (typeOf(racerWaggon) == 'null') {
+				var newwaggon = new Waggon();
+				newwaggon.options.id = data.id;
+				racerWaggon = newwaggon;
+				waggonList[waggonList.length] = newwaggon;
+			}
+			racerWaggon.options.id = data.id;
+			racerWaggon.options.image.spriteNr = data.imgDir;
+			racerWaggon.options.coordX = data.coordX;
+			racerWaggon.options.coordY = data.coordY;
+			racerWaggon.options.speed = data.speed;
+			racerWaggon.options.direction = data.direction;
+			racerWaggon.options.name = data.name;
+			racerWaggon.options.lastUpdate = levelTime;
+		});
+		
+		racer_movesocket.on('highscore', function(data) {
+			$('highScoreTable').empty();
+			Array.each(data, function(el, index) {
+				(new Element('tr')).set('html', '<td>' + (index + 1) + '. ' + el.name+'</td><td>'+(Math.floor(el.score / 100) + ':' + (Math.floor(el.score/10) % 10) + '' + (el.score % 10))+'</td>').inject('highScoreTable','bottom');
+			});
+		});
+		socketExchangeSuccessful = true;
+	} catch (e) {
+		alert('Unfortunately I wasn\'t able to load the network stuff to see other players. But hey - racing in singleplayer is fun too!');
+	}
+}
+
+/***** SOUNDS *****/
+soundManager.url = 'swf/';
+soundManager.onready(function() {
+
+	$('soundSwitch').addEvent('click', function() {
+		if (this.get('src').contains('nosound')) {
+			soundManager.unmute();
+			this.set('src', 'graphics/sound.png');
+		} else {
+			soundManager.mute();
+			this.set('src', 'graphics/nosound.png');
+		}
+	});
+	
+	soundManager.createSound({
+		id: 'bgmusic',
+		volume: 80,
+		url: ['scottJoplin.ogg','scottJoplin.mp3']
+	});
+	
+	soundManager.createSound({
+		id: 'steamWaggon',
+		volume: 60,
+		url: ['steamWaggon.ogg','steamWaggon.mp3']
+	});
+	
+	soundManager.createSound({
+		id: 'readysetgo',
+		volume: 100,
+		url: ['readysetgo.ogg','readysetgo.mp3']
+	});
+	
+	soundManager.createSound({
+		id: 'toot_toot',
+		volume: 100,
+		multiShot: false,
+		url: ['toot_toot.ogg','toot_toot.mp3']
+	});
+	
+	soundManager.createSound({
+		id: 'checkpointReached',
+		volume: 100,
+		multiShot: false,
+		url: ['checkpointReached.ogg','checkpointReached.mp3']
+	});
+	
+	loopSound('bgmusic');
+	loopSound('steamWaggon');
+});
+
+function loopSound(sound) {
+	if (typeOf(sound) == 'string') {
+		sound = soundManager.getSoundById(sound);
+	}
+	if (typeOf(sound) != 'null') {
+		sound.play({
+			onfinish: function() {
+				loopSound(sound);
+			}
+		});
+	}
+}
+</script>
