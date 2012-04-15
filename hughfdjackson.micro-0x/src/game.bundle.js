@@ -1971,14 +1971,6 @@ var createLevel = function(key, levelConf){
             timer.cont = false
         })
 
-        p.on('offtrack', function(){
-            if ( message.innerHTML == '' ) message.innerHTML = 'Get Back On The Track'
-        })
-
-        p.on('ontrack', function(){
-            if  ( message.innerHTML == 'Get Back On The Track' ) message.innerHTML =''
-        })
-
         // LOOP
         var loopMS = 20
           , last   = +new Date
