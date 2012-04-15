@@ -1,0 +1,20 @@
+A2D Racer
+
+Entry for 12-hour bbg challenge in april 2012.
+
+Tested and working adequately on Google Chrome and Mozilla Firefox.
+Makes use of an XHR call to load the level tiles, so it may not run locally
+depending on how picky your browser of choice is (start chrome with --allow-file-access-from-files).
+
+The A2D engine is designed with a tower defense game in mind, but it can be used for lots of stuff. 
+Or will be, when it is properly finished, the included version is still a work in progress.
+
+All graphics are borrowed and slightly modified from lostgarden.com, where they were placed in public domain.
+The retroish font used is provided and hosted by google webfonts, and listed as "Press Start 2P".
+Had no time to add sounds, but they would have been generated bleeps and blops ;)
+
+Oh! by the way:
+the game is controlled using the arrow keys. Press ESC to return to the main menu,
+and if for some reason you find you have exploded, press SPACE to restart.
+
+~Armen138
