@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title> ARROW LEFT! </title>
+	<style>
+
+		* {
+			margin: 0;
+			padding: 0;
+		}
+
+		canvas {
+			position: absolute;
+			left: 50%;
+			margin-left: -480px;
+			top: 0;
+		}
+
+		#screen {
+			outline: 1px solid #ccc;
+		}
+
+		#about {
+			position: absolute;
+			top: 500px;
+			left: 50%;
+			width: 800px;
+			margin-left: -400px;
+			font-size: 12px;
+			color: #666;
+		}
+
+		#about a, #about a:visited {
+			color: #666;
+			text-decoration: underline;
+		}
+
+		#about a:hover {
+			color: red;
+		}
+
+		#boom {
+			position: absolute;
+			height: 80px;
+			top: -200px;
+			left: 50%;
+			width: 240px;
+			padding: 10px;
+			margin-left: -120px;
+			background: #ccc;
+			-webkit-transition: top 0.2s ease;
+		       -moz-transition: top 0.2s ease;
+			    -ms-transition: top 0.2s ease;
+			     -o-transition: top 0.2s ease;
+			        transition: top 0.2s ease;
+		}
+
+		#boom.visible {
+			top: 0;
+		}
+
+	</style>
+	<script type="text/javascript" src="Timer.js"></script>
+	<script type="text/javascript" src="particle.js"></script>
+	<script type="text/javascript" src="track.js"></script>
+	<script type="text/javascript" src="player.js"></script>
+	<script type="text/javascript" src="point.js"></script>
+	<script type="text/javascript" src="scene.js"></script>
+</head>
+<body>
+
+<canvas id="track" width="960" height="480" ></canvas>
+<canvas id="screen" width="960" height="480" ></canvas>
+
+<p id="about">
+	controls: arrow left.</br>
+	about: quick'n'dirty (~4hrs) html5 game for #bbgchallenge4 by <a href="http://twitter.com/ard">ard</a>. inspired by a game I've played when I was few years old.
+</p>
+
+<div id="boom">
+	<h2>Boom! You crashed.</h2>
+	<p>Remember the controls: arrow left!</p>
+	<p>Refresh to start again.</p>
+</div>
+<script type="text/javascript" src="main.js"></script>
+</body>
+</html>
